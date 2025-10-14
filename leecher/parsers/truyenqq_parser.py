@@ -28,26 +28,26 @@ class TruyenQQParser(BaseMangaParser):
 
     def _decompress_response(self, response) -> str:
         content = response.content
-        encoding = response.headers.get("content-encoding", "").lower()
+        # encoding = response.headers.get("content-encoding", "").lower()
 
-        try:
-            if encoding == "gzip":
-                content = gzip.decompress(content)
-            elif encoding == "br":
-                content = brotli.decompress(content)
-            elif encoding == "deflate":
-                import zlib
+        # try:
+        #     if encoding == "gzip":
+        #         content = gzip.decompress(content)
+        #     elif encoding == "br":
+        #         content = brotli.decompress(content)
+        #     elif encoding == "deflate":
+        #         import zlib
 
-                content = zlib.decompress(content)
-        except Exception as e:
-            self.logger.warning(f"Lỗi decompress ({encoding}): {e}")
-            try:
-                if content.startswith(b"\x1f\x8b"):
-                    content = gzip.decompress(content)
-                elif content.startswith(b"\xce\xb2\xcf\x81"):
-                    content = brotli.decompress(content)
-            except Exception as e2:
-                self.logger.error(f"Auto-detect decompress fail: {e2}")
+        #         content = zlib.decompress(content)
+        # except Exception as e:
+        #     self.logger.warning(f"Lỗi decompress ({encoding}): {e}")
+        #     try:
+        #         if content.startswith(b"\x1f\x8b"):
+        #             content = gzip.decompress(content)
+        #         elif content.startswith(b"\xce\xb2\xcf\x81"):
+        #             content = brotli.decompress(content)
+        #     except Exception as e2:
+        #         self.logger.error(f"Auto-detect decompress fail: {e2}")
 
         return content.decode("utf-8", errors="ignore")
 

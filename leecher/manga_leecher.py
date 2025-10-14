@@ -49,24 +49,29 @@ class MangaLeecher:
             session = self.get_session_for_source(series.source.name)
             parser = ParserFactory.create_parser(series.source.name, session)
 
-            chapters = parser.get_chapter_list(series.target_url)
-            if not chapters:
+            web_chapters = parser.get_chapter_list(series.target_url)
+            if not web_chapters:
                 self.logger.error(f"Không tìm thấy chapter: {series.title}")
                 return False
 
-            self.logger.info(f"📚 Tìm {len(chapters)} chapters")
+            db_chapters = await self.db.get_chapters_by_series(series_id)
 
-            success_count = 0
-            for chapter_info in chapters:
+            if len(web_chapters) == len(db_chapters):
+                self.logger.info(
+                    f"✅ Series '{series.title}' đã có đủ chapters, bỏ qua"
+                )
+                return True
+
+            self.logger.info(
+                f"🚀 Tải {len(web_chapters) - len(db_chapters)} chapters mới..."
+            )
+
+            success_count = len(db_chapters)
+            for chapter_info in web_chapters:
                 existing = await self.db.get_chapter_by_url(
                     series_id, chapter_info["url"]
                 )
-
-                if existing and existing.download_status == "COMPLETED":
-                    self.logger.info(
-                        f"⭐️ Chapter {chapter_info['number']} đã hoàn thành, bỏ qua"
-                    )
-                    success_count += 1
+                if existing:
                     continue
 
                 chapter = await self.db.add_chapter(
@@ -89,9 +94,9 @@ class MangaLeecher:
                 await asyncio.sleep(self.DELAY_BETWEEN_CHAPTERS)
 
             self.logger.info(
-                f"✅ Hoàn thành: {success_count}/{len(chapters)} chapters - {series.title}"
+                f"✅ Hoàn thành: {success_count}/{len(web_chapters)} chapters"
             )
-            return success_count > 0
+            return success_count == len(web_chapters)
 
         except Exception as e:
             self.logger.error(f"Lỗi tải series {series_id}: {e}")
