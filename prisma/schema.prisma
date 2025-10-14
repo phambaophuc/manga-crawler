@@ -1,0 +1,101 @@
+generator python {
+  provider             = "prisma-client-py"
+  recursive_type_depth = 5
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model MangaSource {
+  id                    Int          @id @default(autoincrement())
+  name                  String       @unique
+  base_url              String
+  parser_class          String
+  status                SourceStatus @default(ACTIVE)
+  rate_limit_per_minute Int          @default(30)
+  created_at            DateTime     @default(now())
+  updated_at            DateTime     @updatedAt
+
+  // Relations
+  series MangaSeries[]
+
+  @@map("manga_sources")
+}
+
+model MangaSeries {
+  id          Int          @id @default(autoincrement())
+  source_id   Int
+  title       String
+  description String?
+  target_url  String
+  status      SeriesStatus @default(ACTIVE)
+  created_at  DateTime     @default(now())
+  updated_at  DateTime     @updatedAt
+
+  // Relations
+  source   MangaSource    @relation(fields: [source_id], references: [id], onDelete: Cascade)
+  chapters MangaChapter[]
+
+  @@unique([source_id, target_url])
+  @@map("manga_series")
+}
+
+model MangaChapter {
+  id              Int            @id @default(autoincrement())
+  series_id       Int
+  chapter_number  String
+  chapter_title   String?
+  chapter_url     String
+  image_count     Int            @default(0)
+  download_status DownloadStatus @default(PENDING)
+  downloaded_at   DateTime?
+  created_at      DateTime       @default(now())
+
+  // Relations
+  series MangaSeries    @relation(fields: [series_id], references: [id], onDelete: Cascade)
+  images ChapterImage[]
+
+  @@unique([series_id, chapter_url])
+  @@map("manga_chapters")
+}
+
+model ChapterImage {
+  id              Int            @id @default(autoincrement())
+  chapter_id      Int
+  image_url       String
+  image_order     Int
+  local_path      String?
+  file_size       BigInt?
+  download_status DownloadStatus @default(PENDING)
+  created_at      DateTime       @default(now())
+
+  // Relations
+  chapter MangaChapter @relation(fields: [chapter_id], references: [id], onDelete: Cascade)
+
+  @@unique([chapter_id, image_order])
+  @@map("chapter_images")
+}
+
+// Enums
+enum SourceStatus {
+  ACTIVE
+  INACTIVE
+  MAINTENANCE
+}
+
+enum SeriesStatus {
+  ACTIVE
+  PAUSED
+  COMPLETED
+  ERROR
+}
+
+enum DownloadStatus {
+  PENDING
+  DOWNLOADING
+  COMPLETED
+  FAILED
+  PARTIAL
+}
