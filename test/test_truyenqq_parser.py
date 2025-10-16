@@ -14,7 +14,7 @@ def test_truyenqq_parser():
         print("🧪 Testing TruyenQQ Parser...")
 
         # Test URL (thay bằng URL thật khi test)
-        test_series_url = "https://truyenqqgo.com/truyen-tranh/akira-20199"
+        test_series_url = "https://truyenqqgo.com/truyen-tranh/tai-ach-giang-lam-ta-tien-hoa-thanh-tinh-hong-de-vuong-20682"
         test_chapter_url = "https://truyenqqgo.com/truyen-tranh/akira-20199-chap-1.html"
 
         print(f"1. Testing chapter list from: {test_series_url}")
@@ -23,7 +23,7 @@ def test_truyenqq_parser():
 
         if chapters:
             # Hiển thị 5 chapters đầu
-            for i, chapter in enumerate(chapters[:5]):
+            for i, chapter in enumerate(chapters[:15]):
                 print(f"   {i+1}. {chapter['number']} - {chapter['title']}")
                 print(f"      URL: {chapter['url']}")
 

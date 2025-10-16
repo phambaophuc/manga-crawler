@@ -54,7 +54,9 @@ class MangaLeecher:
                 self.logger.error(f"Không tìm thấy chapter: {series.title}")
                 return False
 
-            db_chapters = await self.db.get_chapters_by_series(series_id)
+            db_chapters = await self.db.get_chapters_by_series(
+                series_id, include_deleted=True
+            )
 
             if len(web_chapters) == len(db_chapters):
                 self.logger.info(

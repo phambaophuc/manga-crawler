@@ -223,10 +223,16 @@ class LeecheDatabaseManager:
             self.logger.error(f"❌ Lỗi lấy pending chapters series {series_id}: {e}")
             return []
 
-    async def get_chapters_by_series(self, series_id: int) -> List[MangaChapter]:
+    async def get_chapters_by_series(
+        self, series_id: int, include_deleted: bool = False
+    ) -> List[MangaChapter]:
         try:
+            where_clause = {"series_id": series_id}
+            if not include_deleted:
+                where_clause["is_deleted"] = False
+
             return await self.db.mangachapter.find_many(
-                where={"series_id": series_id}, order=[{"chapter_number": "asc"}]
+                where=where_clause, order=[{"chapter_number": "asc"}]
             )
         except Exception as e:
             self.logger.error(f"Lỗi lấy chapters series {series_id}: {e}")

@@ -15,8 +15,9 @@ model MangaSource {
   parser_class          String
   status                SourceStatus @default(ACTIVE)
   rate_limit_per_minute Int          @default(30)
-  created_at            DateTime     @default(now())
-  updated_at            DateTime     @updatedAt
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
 
   // Relations
   series MangaSeries[]
@@ -28,11 +29,17 @@ model MangaSeries {
   id          Int          @id @default(autoincrement())
   source_id   Int
   title       String
+  slug        String       @unique
   description String?
+  author      String
+  cover_url   String
   target_url  String
+  views       Int          @default(0)
+  genres      String[]
   status      SeriesStatus @default(ACTIVE)
-  created_at  DateTime     @default(now())
-  updated_at  DateTime     @updatedAt
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
 
   // Relations
   source   MangaSource    @relation(fields: [source_id], references: [id], onDelete: Cascade)
@@ -51,7 +58,9 @@ model MangaChapter {
   image_count     Int            @default(0)
   download_status DownloadStatus @default(PENDING)
   downloaded_at   DateTime?
-  created_at      DateTime       @default(now())
+
+  is_deleted Boolean  @default(false)
+  created_at DateTime @default(now())
 
   // Relations
   series MangaSeries    @relation(fields: [series_id], references: [id], onDelete: Cascade)
