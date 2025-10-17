@@ -4,3 +4,4 @@ requests
 brotli
 beautifulsoup4
 python-slugify
+Pillow

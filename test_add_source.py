@@ -1,10 +1,7 @@
 import asyncio
 import logging
 from database.leech_manager import LeecheDatabaseManager
-
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
+from shared.logger import logging
 
 
 async def test_source():

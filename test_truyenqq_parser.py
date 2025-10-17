@@ -1,9 +1,6 @@
 import logging
 from leecher.parsers.truyenqq_parser import TruyenQQParser
-
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
+from shared.logger import logging
 
 
 def test_truyenqq_parser():
@@ -14,8 +11,10 @@ def test_truyenqq_parser():
         print("🧪 Testing TruyenQQ Parser...")
 
         # Test URL (thay bằng URL thật khi test)
-        test_series_url = "https://truyenqqgo.com/truyen-tranh/tai-ach-giang-lam-ta-tien-hoa-thanh-tinh-hong-de-vuong-20682"
-        test_chapter_url = "https://truyenqqgo.com/truyen-tranh/akira-20199-chap-1.html"
+        test_series_url = (
+            "https://truyenqqgo.com/truyen-tranh/lao-xa-tu-tien-truyen-16211"
+        )
+        test_chapter_url = "https://truyenqqgo.com/truyen-tranh/lao-xa-tu-tien-truyen-16211-chap-12.html"
 
         print(f"1. Testing chapter list from: {test_series_url}")
         chapters = parser.get_chapter_list(test_series_url)

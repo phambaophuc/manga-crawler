@@ -8,7 +8,6 @@ from leecher.base_parser import BaseMangaParser
 
 class TruyenQQParser(BaseMangaParser):
 
-    TRUSTED_DOMAINS = ["hinhhinh.com", "tintruyen.net", "truyenqqgo.com"]
     VALID_IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp"]
     INVALID_IMAGE_PATTERNS = [
         ".gif",
@@ -183,14 +182,12 @@ class TruyenQQParser(BaseMangaParser):
         has_valid_ext = any(
             url_without_query.endswith(ext) for ext in self.VALID_IMAGE_EXTENSIONS
         )
+
         has_invalid_pattern = any(
             pattern in url_lower for pattern in self.INVALID_IMAGE_PATTERNS
         )
-        is_from_trusted_source = any(
-            domain in url_lower for domain in self.TRUSTED_DOMAINS
-        )
 
-        return has_valid_ext and not has_invalid_pattern and is_from_trusted_source
+        return has_valid_ext and not has_invalid_pattern
 
     def _deduplicate_and_sort(self, image_urls: List[str]) -> List[str]:
         seen = set()

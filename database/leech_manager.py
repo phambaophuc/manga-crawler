@@ -234,6 +234,8 @@ class LeecheDatabaseManager:
             if not include_deleted:
                 where_clause["is_deleted"] = False
 
+            where_clause["download_status"] = "COMPLETED"
+
             return await self.db.mangachapter.find_many(
                 where=where_clause, order=[{"chapter_number": "asc"}]
             )
@@ -251,7 +253,8 @@ class LeecheDatabaseManager:
                     "series_id_chapter_url": {
                         "series_id": series_id,
                         "chapter_url": chapter_url,
-                    }
+                    },
+                    "download_status": "COMPLETED",
                 }
             )
         except Exception as e:

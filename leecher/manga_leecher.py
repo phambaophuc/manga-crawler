@@ -1,25 +1,24 @@
 import asyncio
 from pathlib import Path
-import re
-from urllib.parse import urlparse
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 from typing import Dict
 import logging
 from leecher.parser_factory import ParserFactory
-from slugify import slugify
+from shared.image_utils import ImageConverter
+from shared.storage_utils import StorageUtils
 
 
 class MangaLeecher:
     """Core leecher cho truyện tranh"""
 
     DEFAULT_TIMEOUT = 30
-    DELAY_BETWEEN_CHAPTERS = 2
-    DELAY_BETWEEN_IMAGES = 0.1
-    MAX_CONCURRENT_CHAPTERS = 3
-    MAX_CONCURRENT_IMAGES = 30
-    CONTENT_TYPE_MAP = {"jpeg": "jpg", "jpg": "jpg", "png": "png", "webp": "webp"}
+    DELAY_BETWEEN_CHAPTERS = 3
+    DELAY_BETWEEN_IMAGES = 0.3
+    MAX_CONCURRENT_CHAPTERS = 2
+    MAX_CONCURRENT_IMAGES = 15
+    WEBP_QUALITY = 85
 
     def __init__(self, db_manager, storage_path: str = "manga_storage"):
         self.db = db_manager
@@ -29,13 +28,16 @@ class MangaLeecher:
         self.logger = logging.getLogger(__name__)
         self.chapter_semaphore = asyncio.Semaphore(self.MAX_CONCURRENT_CHAPTERS)
         self.image_semaphore = asyncio.Semaphore(self.MAX_CONCURRENT_IMAGES)
+        self.image_converter = ImageConverter()
 
     def get_session_for_source(self, source_name: str) -> requests.Session:
         if source_name not in self.session_pool:
             session = requests.Session()
-            retry_strategy = Retry(total=3, backoff_factor=1)
+            retry_strategy = Retry(
+                total=3, backoff_factor=2, respect_retry_after_header=True
+            )
             adapter = HTTPAdapter(
-                pool_connections=10, pool_maxsize=10, max_retries=retry_strategy
+                pool_connections=5, pool_maxsize=15, max_retries=retry_strategy
             )
             session.mount("http://", adapter)
             session.mount("https://", adapter)
@@ -74,10 +76,7 @@ class MangaLeecher:
                 if not await self.db.get_chapter_by_url(series_id, chapter_info["url"]):
                     chapters_to_download.append(chapter_info)
 
-            self.logger.info(
-                f"🚀 Tải {len(chapters_to_download)} chapters mới "
-                f"(song song {self.MAX_CONCURRENT_CHAPTERS} chapters)..."
-            )
+            self.logger.info(f"🚀 Tải {len(chapters_to_download)} chapters mới")
 
             tasks = [
                 self._download_chapter_task(
@@ -145,7 +144,7 @@ class MangaLeecher:
 
             image_urls = parser.get_image_urls(chapter_url)
             if not image_urls:
-                self.logger.warning(f"Chapter {chapter_id}: không có ảnh")
+                self.logger.warning(f"Chapter {chapter_number}: không có ảnh")
                 await self.db.update_chapter_status(chapter_id, "FAILED")
                 return False
 
@@ -233,11 +232,9 @@ class MangaLeecher:
         source_name: str,
     ) -> bool:
         try:
-            series_slug = slugify(series_title)
-            chapter_folder = (
-                self.storage_path / series_slug / f"chapter_{chapter_number}"
+            chapter_folder = StorageUtils.create_directory_structure(
+                self.storage_path, series_title, chapter_number
             )
-            chapter_folder.mkdir(parents=True, exist_ok=True)
 
             session = self.get_session_for_source(source_name)
             headers = {"Referer": "https://truyenqqgo.com/"}
@@ -254,20 +251,25 @@ class MangaLeecher:
                 self.logger.error(f"HTTP {response.status_code}: ảnh {order}")
                 return False
 
-            ext = self._get_image_extension(response, image_url)
-            filepath = chapter_folder / f"{order:03d}.{ext}"
-
-            await loop.run_in_executor(
-                None, lambda: filepath.write_bytes(response.content)
+            # Convert to WebP
+            webp_data, file_size = await loop.run_in_executor(
+                None,
+                self.image_converter.to_webp,
+                response.content,
+                self.WEBP_QUALITY,
             )
 
-            relative_path = f"{series_slug}/chapter_{chapter_number}/{filepath.name}"
+            filepath = chapter_folder / f"{order:03d}.webp"
+            await loop.run_in_executor(None, lambda: filepath.write_bytes(webp_data))
+
+            relative_path = StorageUtils.get_relative_path(self.storage_path, filepath)
+
             await self.db.add_chapter_image(
                 chapter_id=chapter_id,
                 image_url=image_url,
                 image_order=order,
                 local_path=str(relative_path),
-                file_size=len(response.content),
+                file_size=file_size,
             )
 
             self.logger.debug(f"✅ Ảnh {order}: {filepath.name}")
@@ -277,19 +279,3 @@ class MangaLeecher:
         except Exception as e:
             self.logger.error(f"Lỗi ảnh {order}: {e}")
             return False
-
-    @staticmethod
-    def _get_series_folder_name(series_title: str) -> str:
-        slug = re.sub(r"[^\w\s-]", "", series_title.lower())
-        return re.sub(r"[-\s]+", "-", slug).strip("-_")
-
-    @staticmethod
-    def _get_image_extension(response: requests.Response, image_url: str) -> str:
-        content_type = response.headers.get("content-type", "").lower()
-
-        for key, ext in MangaLeecher.CONTENT_TYPE_MAP.items():
-            if key in content_type:
-                return ext
-
-        path = urlparse(image_url).path
-        return path.split(".")[-1] if "." in path else "jpg"

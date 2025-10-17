@@ -16,7 +16,7 @@ class MangaLeechService:
         signal.signal(signal.SIGINT, self._signal_handler)
         signal.signal(signal.SIGTERM, self._signal_handler)
 
-    def _signal_handler(self, signum):
+    def _signal_handler(self, signum, frame):
         self.logger.info(f"Nhận signal {signum}, đang dừng...")
         self.stop()
 
@@ -53,6 +53,7 @@ class MangaLeechService:
         finally:
             await self.db.disconnect()
             self.is_running = False
+            self.logger.info("Đã dừng dịch vụ.")
 
     async def _process_pending_series(self):
         try:

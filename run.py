@@ -2,11 +2,7 @@ import asyncio
 import logging
 from database.leech_manager import LeecheDatabaseManager
 from leecher.service import MangaLeechService
-
-
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
+from shared.logger import logging
 
 
 async def main():
