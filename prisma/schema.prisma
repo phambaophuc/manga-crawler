@@ -31,8 +31,8 @@ model MangaSeries {
   title       String
   slug        String       @unique
   description String?
-  author      String
-  cover_url   String
+  author      String?
+  cover_url   String?
   target_url  String
   views       Int          @default(0)
   genres      String[]

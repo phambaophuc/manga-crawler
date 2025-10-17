@@ -1,2 +1,6 @@
 prisma
 python-dotenv
+requests
+brotli
+beautifulsoup4
+python-slugify

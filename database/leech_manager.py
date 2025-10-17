@@ -4,6 +4,8 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime
 import logging
 
+from slugify import slugify
+
 
 class LeecheDatabaseManager:
     def __init__(self) -> None:
@@ -90,6 +92,7 @@ class LeecheDatabaseManager:
                     "create": {
                         "source_id": source.id,
                         "title": title,
+                        "slug": slugify(title),
                         "target_url": target_url,
                         "description": description,
                     },
