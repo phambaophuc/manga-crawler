@@ -7,6 +7,7 @@ from typing import Dict
 import logging
 from leecher.parser_factory import ParserFactory
 from shared.image_utils import ImageConverter
+from shared.r2_storage import R2Storage
 from shared.storage_utils import StorageUtils
 
 
@@ -20,7 +21,9 @@ class MangaLeecher:
     MAX_CONCURRENT_IMAGES = 15
     WEBP_QUALITY = 85
 
-    def __init__(self, db_manager, storage_path: str = "manga_storage"):
+    def __init__(
+        self, db_manager, storage_path: str = "manga_storage", enable_r2: bool = True
+    ):
         self.db = db_manager
         self.storage_path = Path(storage_path)
         self.storage_path.mkdir(parents=True, exist_ok=True)
@@ -29,6 +32,10 @@ class MangaLeecher:
         self.chapter_semaphore = asyncio.Semaphore(self.MAX_CONCURRENT_CHAPTERS)
         self.image_semaphore = asyncio.Semaphore(self.MAX_CONCURRENT_IMAGES)
         self.image_converter = ImageConverter()
+
+        # R2 Storage
+        self.enable_r2 = enable_r2
+        self.r2_storage = R2Storage() if enable_r2 else None
 
     def get_session_for_source(self, source_name: str) -> requests.Session:
         if source_name not in self.session_pool:
@@ -232,10 +239,6 @@ class MangaLeecher:
         source_name: str,
     ) -> bool:
         try:
-            chapter_folder = StorageUtils.create_directory_structure(
-                self.storage_path, series_title, chapter_number
-            )
-
             session = self.get_session_for_source(source_name)
             headers = {"Referer": "https://truyenqqgo.com/"}
 
@@ -259,20 +262,49 @@ class MangaLeecher:
                 self.WEBP_QUALITY,
             )
 
-            filepath = chapter_folder / f"{order:03d}.webp"
-            await loop.run_in_executor(None, lambda: filepath.write_bytes(webp_data))
+            # Create object key for R2
+            safe_series = StorageUtils.sanitize_filename(series_title)
+            safe_chapter = StorageUtils.sanitize_filename(f"chapter_{chapter_number}")
+            r2_object_key = f"{safe_series}/{safe_chapter}/{order:03d}.webp"
 
-            relative_path = StorageUtils.get_relative_path(self.storage_path, filepath)
+            # Upload to R2
+            if self.enable_r2 and self.r2_storage:
+                success, public_url = await loop.run_in_executor(
+                    None,
+                    self.r2_storage.upload_file,
+                    webp_data,
+                    r2_object_key,
+                    "image/webp",
+                )
+
+                if not success:
+                    self.logger.error(f"❌ R2 upload failed: ảnh {order}")
+                    return False
+
+                storage_path = public_url
+            else:
+                chapter_folder = StorageUtils.create_directory_structure(
+                    self.storage_path, series_title, chapter_number
+                )
+                filepath = chapter_folder / f"{order:03d}.webp"
+                await loop.run_in_executor(
+                    None, lambda: filepath.write_bytes(webp_data)
+                )
+                storage_path = str(
+                    StorageUtils.get_relative_path(self.storage_path, filepath)
+                )
 
             await self.db.add_chapter_image(
                 chapter_id=chapter_id,
                 image_url=image_url,
                 image_order=order,
-                local_path=str(relative_path),
+                local_path=storage_path,
                 file_size=file_size,
             )
 
-            self.logger.debug(f"✅ Ảnh {order}: {filepath.name}")
+            self.logger.debug(
+                f"✅ Ảnh {order}: {r2_object_key if self.enable_r2 else f'{order:03d}.webp'}"
+            )
             await asyncio.sleep(self.DELAY_BETWEEN_IMAGES)
             return True
 

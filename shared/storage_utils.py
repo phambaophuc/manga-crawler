@@ -6,6 +6,22 @@ from slugify import slugify
 class StorageUtils:
 
     @staticmethod
+    def sanitize_filename(filename: str, max_length: int = 100) -> str:
+        slug = slugify(
+            filename,
+            max_length=max_length,
+            word_boundary=True,
+            separator="_",
+            lowercase=True,
+            replacements=[],
+        )
+
+        if not slug:
+            slug = "untitled"
+
+        return slug
+
+    @staticmethod
     def create_directory_structure(
         base_path: Path, series_title: str, chapter_number: str
     ) -> Path:
