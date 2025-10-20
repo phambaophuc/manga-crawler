@@ -23,9 +23,9 @@ async def test_leecher():
         # Thêm series test
         series = await db.add_manga_series(
             source_name="truyenqq",
-            title="Thức Tỉnh Toàn Chức",
-            target_url="https://truyenqqgo.com/truyen-tranh/thuc-tinh-toan-chuc-18865",
-            description="Truyện tranh Thức Tỉnh Toàn Chức được cập nhật nhanh và đầy đủ nhất tại TruyenQQ. Bạn đọc đừng quên để lại bình luận và chia sẻ, ủng hộ TruyenQQ ra các chương mới nhất của truyện Thức Tỉnh Toàn Chức.",
+            title="Sensei, Bokutachi Wa Koroshiteimasen",
+            target_url="https://truyenqqgo.com/truyen-tranh/sensei-bokutachi-wa-koroshiteimasen-22126",
+            description="Truyện tranh Sensei, Bokutachi Wa Koroshiteimasen.",
         )
 
         if series:

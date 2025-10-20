@@ -1,7 +1,7 @@
 import asyncio
 import logging
 
-from database.manager import DatabaseManager
+from database.leech_manager import LeecheDatabaseManager
 
 
 logging.basicConfig(
@@ -10,7 +10,7 @@ logging.basicConfig(
 
 
 async def test_schema():
-    db = DatabaseManager()
+    db = LeecheDatabaseManager()
 
     try:
         if not await db.connect():

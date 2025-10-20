@@ -22,7 +22,7 @@ class MangaLeecher:
     WEBP_QUALITY = 85
 
     def __init__(
-        self, db_manager, storage_path: str = "manga_storage", enable_r2: bool = True
+        self, db_manager, storage_path: str = "manga_storage", enable_r2: bool = False
     ):
         self.db = db_manager
         self.storage_path = Path(storage_path)
@@ -87,7 +87,12 @@ class MangaLeecher:
 
             tasks = [
                 self._download_chapter_task(
-                    parser, series_id, ch, series.title, series.source.name
+                    parser,
+                    series_id,
+                    ch,
+                    series.title,
+                    series.source.name,
+                    series.source.base_url,
                 )
                 for ch in chapters_to_download
             ]
@@ -110,12 +115,14 @@ class MangaLeecher:
         chapter_info: dict,
         series_title: str,
         source_name: str,
+        source_url: str,
     ) -> bool:
         async with self.chapter_semaphore:
             try:
+                chapter_number = self.parse_chapter_number(chapter_info["number"])
                 chapter = await self.db.add_chapter(
                     series_id=series_id,
-                    chapter_number=chapter_info["number"],
+                    chapter_number=chapter_number,
                     chapter_title=chapter_info["title"],
                     chapter_url=chapter_info["url"],
                 )
@@ -127,8 +134,9 @@ class MangaLeecher:
                     chapter.id,
                     chapter_info["url"],
                     series_title,
-                    chapter_info["number"],
+                    chapter_number,
                     source_name,
+                    source_url,
                 )
                 await asyncio.sleep(self.DELAY_BETWEEN_CHAPTERS)
                 return result
@@ -143,8 +151,9 @@ class MangaLeecher:
         chapter_id: int,
         chapter_url: str,
         series_title: str,
-        chapter_number: str,
+        chapter_number: float,
         source_name: str,
+        source_url: str,
     ) -> bool:
         try:
             await self.db.update_chapter_status(chapter_id, "DOWNLOADING")
@@ -187,6 +196,7 @@ class MangaLeecher:
                 series_title,
                 chapter_number,
                 source_name,
+                source_url,
             )
 
             success_count = len(completed_orders) + parallel_success
@@ -210,8 +220,9 @@ class MangaLeecher:
         chapter_id: int,
         images_to_download: list,
         series_title: str,
-        chapter_number: str,
+        chapter_number: float,
         source_name: str,
+        source_url: str,
     ) -> int:
         tasks = [
             self._download_image_task(
@@ -221,11 +232,17 @@ class MangaLeecher:
                 series_title,
                 chapter_number,
                 source_name,
+                source_url,
             )
             for order, url in images_to_download
         ]
         results = await asyncio.gather(*tasks, return_exceptions=True)
-        success_count = sum(1 for r in results if r is True)
+
+        image_records = [r for r in results if isinstance(r, dict)]
+        success_count = len(image_records)
+        if success_count > 0:
+            await self.db.bulk_add_chapter_images(image_records)
+
         self.logger.info(f"✅ Đã tải {success_count}/{len(images_to_download)} ảnh")
         return success_count
 
@@ -235,12 +252,13 @@ class MangaLeecher:
         image_url: str,
         order: int,
         series_title: str,
-        chapter_number: str,
+        chapter_number: float,
         source_name: str,
+        source_url: str,
     ) -> bool:
         try:
             session = self.get_session_for_source(source_name)
-            headers = {"Referer": "https://truyenqqgo.com/"}
+            headers = {"Referer": source_url}
 
             loop = asyncio.get_event_loop()
             response = await loop.run_in_executor(
@@ -294,20 +312,24 @@ class MangaLeecher:
                     StorageUtils.get_relative_path(self.storage_path, filepath)
                 )
 
-            await self.db.add_chapter_image(
-                chapter_id=chapter_id,
-                image_url=image_url,
-                image_order=order,
-                local_path=storage_path,
-                file_size=file_size,
-            )
-
-            self.logger.debug(
-                f"✅ Ảnh {order}: {r2_object_key if self.enable_r2 else f'{order:03d}.webp'}"
-            )
             await asyncio.sleep(self.DELAY_BETWEEN_IMAGES)
-            return True
+            return {
+                "chapter_id": chapter_id,
+                "image_url": image_url,
+                "image_order": order,
+                "local_path": storage_path,
+                "file_size": file_size,
+                "download_status": "COMPLETED",
+            }
 
         except Exception as e:
             self.logger.error(f"Lỗi ảnh {order}: {e}")
-            return False
+            return None
+
+    @staticmethod
+    def parse_chapter_number(value: str):
+        try:
+            num = float(value)
+            return int(num) if num.is_integer() else num
+        except (ValueError, TypeError):
+            return None

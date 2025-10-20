@@ -7,9 +7,19 @@ import logging
 from slugify import slugify
 
 
+class PrismaClientSingleton:
+    _instance: Prisma | None = None
+
+    @classmethod
+    def get_client(cls) -> Prisma:
+        if cls._instance is None:
+            cls._instance = Prisma()
+        return cls._instance
+
+
 class LeecheDatabaseManager:
     def __init__(self) -> None:
-        self.db: Prisma = Prisma()
+        self.db = PrismaClientSingleton.get_client()
         self.logger: logging.Logger = logging.getLogger(__name__)
 
     async def connect(self) -> bool:
@@ -303,6 +313,17 @@ class LeecheDatabaseManager:
             )
             return None
 
+    async def bulk_add_chapter_images(self, image_records: list[dict]):
+        if not image_records:
+            return 0
+
+        try:
+            await self.db.chapterimage.create_many(data=image_records)
+            return len(image_records)
+        except Exception as e:
+            self.logger.error(f"❌ Bulk insert failed: {e}")
+            return 0
+
     async def get_chapter_images(self, chapter_id: int) -> List[ChapterImage]:
         """Lấy danh sách ảnh của chapter"""
         try:
@@ -322,3 +343,14 @@ class LeecheDatabaseManager:
             self.logger.info(f"✅ Đã xóa ảnh chapter {chapter_id}")
         except Exception as e:
             self.logger.error(f"❌ Lỗi xóa ảnh chapter {chapter_id}: {e}")
+
+    # ==================== HEALTH CHECK ====================
+
+    async def health_check(self):
+        try:
+            count = await self.db.mangasource.count()
+            self.logger.info(f"✅ Database health check passed. Sources count: {count}")
+            return True
+        except Exception as e:
+            self.logger.error(f"❌ Database health check failed: {e}")
+            return False

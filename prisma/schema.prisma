@@ -4,8 +4,9 @@ generator python {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model MangaSource {
@@ -52,7 +53,7 @@ model MangaSeries {
 model MangaChapter {
   id              Int            @id @default(autoincrement())
   series_id       Int
-  chapter_number  String
+  chapter_number  Float
   chapter_title   String?
   chapter_url     String
   image_count     Int            @default(0)

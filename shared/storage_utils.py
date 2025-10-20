@@ -23,7 +23,7 @@ class StorageUtils:
 
     @staticmethod
     def create_directory_structure(
-        base_path: Path, series_title: str, chapter_number: str
+        base_path: Path, series_title: str, chapter_number: float
     ) -> Path:
         series_slug = slugify(series_title)
         chapter_folder = base_path / series_slug / f"chapter_{chapter_number}"
