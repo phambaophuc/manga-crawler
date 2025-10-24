@@ -1,7 +1,7 @@
 from prisma import Prisma
 from prisma.models import MangaSource, MangaSeries, MangaChapter, ChapterImage
 from typing import List, Optional, Dict, Any
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 import logging
 
 from slugify import slugify
@@ -117,14 +117,36 @@ class LeecheDatabaseManager:
             self.logger.error(f"❌ Lỗi thêm manga series {title}: {e}")
             return None
 
+    async def update_last_update_id(
+        self,
+        id: str,
+    ) -> None:
+        """Cập nhật thời gian last_update cho manga series theo slug"""
+        try:
+            tz = timezone(timedelta(hours=7))
+            now = datetime.now(tz)
+            await self.db.mangaseries.update_many(
+                where={"id": id},
+                data={"last_update": now},
+            )
+        except Exception as e:
+            self.logger.error("❌ Lỗi cập nhật last_update")
+
     async def get_pending_series(self) -> List[MangaSeries]:
         try:
-            series = await self.db.mangaseries.find_many(
-                where={"status": "ACTIVE"},
+            tz = timezone(timedelta(hours=7))
+            one_day_ago = datetime.now(tz) - timedelta(days=1)
+
+            pending_series = await self.db.mangaseries.find_many(
+                where={
+                    "status": "ACTIVE",
+                    "OR": [
+                        {"last_update": {"gt": one_day_ago}},
+                        {"last_update": {"equals": None}},
+                    ],
+                },
                 include={"source": True},
             )
-
-            pending_series = [s for s in series if s.status != "COMPLETED"]
 
             self.logger.info(f"Tìm thấy {len(pending_series)} series cần xử lý")
             return pending_series

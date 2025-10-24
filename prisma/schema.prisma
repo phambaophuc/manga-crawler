@@ -39,8 +39,9 @@ model MangaSeries {
   genres      String[]
   status      SeriesStatus @default(ACTIVE)
 
-  created_at DateTime @default(now())
-  updated_at DateTime @updatedAt
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
+  last_update DateTime?
 
   // Relations
   source   MangaSource    @relation(fields: [source_id], references: [id], onDelete: Cascade)

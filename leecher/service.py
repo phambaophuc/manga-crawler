@@ -8,10 +8,10 @@ from leecher import ParserFactory
 class MangaLeechService:
     def __init__(self, db_manager, check_interval: int = 60):
         self.db = db_manager
-        self.leecher = MangaLeecher(self.db)
+        self.leecher = MangaLeecher(self.db, enable_r2=True)
         self.check_interval = check_interval
         self.logger = logging.getLogger(__name__)
-        self.is_running = False
+        self._stop_event = asyncio.Event()
         self._register_parsers()
         signal.signal(signal.SIGINT, self._signal_handler)
         signal.signal(signal.SIGTERM, self._signal_handler)
@@ -29,8 +29,6 @@ class MangaLeechService:
             self.logger.error(f"Lỗi đăng ký parser: {e}")
 
     async def start(self):
-        self.is_running = True
-
         if not await self.db.connect():
             self.logger.error("Kết nối database thất bại")
             return
@@ -42,9 +40,14 @@ class MangaLeechService:
         self.logger.info("Manga Leech Service khởi động...")
 
         try:
-            while self.is_running:
+            while not self._stop_event.is_set():
                 await self._process_pending_series()
-                await asyncio.sleep(self.check_interval)
+                try:
+                    await asyncio.wait_for(
+                        self._stop_event.wait(), timeout=self.check_interval
+                    )
+                except asyncio.TimeoutError:
+                    pass
 
         except KeyboardInterrupt:
             self.logger.info("Service dừng bởi người dùng")
@@ -52,7 +55,6 @@ class MangaLeechService:
             self.logger.error(f"Lỗi service: {e}")
         finally:
             await self.db.disconnect()
-            self.is_running = False
             self.logger.info("Đã dừng dịch vụ.")
 
     async def _process_pending_series(self):
@@ -64,10 +66,22 @@ class MangaLeechService:
 
             self.logger.info(f"Xử lý {len(pending_series)} series")
 
-            for series in pending_series:
+            for i, series in enumerate(pending_series):
+                if self._stop_event.is_set():
+                    break
+
                 if series.source.name not in ParserFactory.get_available_sources():
                     self.logger.error(f"Source không hỗ trợ: {series.source.name}")
                     continue
+
+                if i > 0:
+                    self.logger.info("⏳ Chờ 3s...")
+                    try:
+                        await asyncio.wait_for(self._stop_event.wait(), timeout=3.0)
+                    except asyncio.TimeoutError:
+                        pass
+                    if self._stop_event.is_set():
+                        break
 
                 success = await self.leecher.download_series(series.id)
                 level = self.logger.info if success else self.logger.error
@@ -77,4 +91,4 @@ class MangaLeechService:
             self.logger.error(f"Lỗi xử lý series: {e}")
 
     def stop(self):
-        self.is_running = False
+        self._stop_event.set()

@@ -97,6 +97,7 @@ class MangaLeecher:
                 for ch in chapters_to_download
             ]
             results = await asyncio.gather(*tasks, return_exceptions=True)
+            await self.db.update_last_update_id(series_id)
 
             success_count = len(db_chapters) + sum(1 for r in results if r is True)
             self.logger.info(
