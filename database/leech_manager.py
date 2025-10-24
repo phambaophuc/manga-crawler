@@ -141,7 +141,7 @@ class LeecheDatabaseManager:
                 where={
                     "status": "ACTIVE",
                     "OR": [
-                        {"last_update": {"gt": one_day_ago}},
+                        {"last_update": {"lt": one_day_ago}},
                         {"last_update": {"equals": None}},
                     ],
                 },

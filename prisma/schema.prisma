@@ -73,7 +73,7 @@ model MangaChapter {
 }
 
 model ChapterImage {
-  id              Int            @id @default(autoincrement())
+  id              String         @id @default(uuid())
   chapter_id      Int
   image_url       String
   image_order     Int
