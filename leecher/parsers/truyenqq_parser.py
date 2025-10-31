@@ -1,9 +1,8 @@
-import gzip
-import brotli
 import re
 from bs4 import BeautifulSoup
 from typing import List, Dict, Optional
 from leecher.base_parser import BaseMangaParser
+from concurrent.futures import ThreadPoolExecutor
 
 
 class TruyenQQParser(BaseMangaParser):
@@ -27,28 +26,8 @@ class TruyenQQParser(BaseMangaParser):
 
     def _decompress_response(self, response) -> str:
         content = response.content
-        # encoding = response.headers.get("content-encoding", "").lower()
-
-        # try:
-        #     if encoding == "gzip":
-        #         content = gzip.decompress(content)
-        #     elif encoding == "br":
-        #         content = brotli.decompress(content)
-        #     elif encoding == "deflate":
-        #         import zlib
-
-        #         content = zlib.decompress(content)
-        # except Exception as e:
-        #     self.logger.warning(f"Lỗi decompress ({encoding}): {e}")
-        #     try:
-        #         if content.startswith(b"\x1f\x8b"):
-        #             content = gzip.decompress(content)
-        #         elif content.startswith(b"\xce\xb2\xcf\x81"):
-        #             content = brotli.decompress(content)
-        #     except Exception as e2:
-        #         self.logger.error(f"Auto-detect decompress fail: {e2}")
-
-        return content.decode("utf-8", errors="ignore")
+        encoding = response.apparent_encoding or response.encoding or "utf-8"
+        return content.decode(encoding, errors="ignore")
 
     def get_chapter_list(self, series_url: str) -> List[Dict[str, str]]:
         try:
@@ -71,57 +50,34 @@ class TruyenQQParser(BaseMangaParser):
     def _extract_from_works_chapter_structure(
         self, soup: BeautifulSoup, base_url: str
     ) -> List[Dict[str, str]]:
-        chapters = []
         chapter_items = soup.select(".works-chapter-list .works-chapter-item")
-
         if not chapter_items:
-            return chapters
+            return []
 
-        for item in chapter_items:
+        def process_item(item):
             try:
                 name_chap = item.select_one(".name-chap a")
                 if not name_chap:
-                    continue
+                    return None
 
                 chapter_url = name_chap.get("href")
                 chapter_text = self.clean_text(name_chap.get_text())
 
                 if chapter_url:
-                    chapters.append(
-                        {
-                            "url": self.normalize_url(chapter_url, base_url),
-                            "number": self.extract_chapter_number(chapter_text),
-                            "title": chapter_text,
-                        }
-                    )
+                    return {
+                        "url": self.normalize_url(chapter_url, base_url),
+                        "number": self.extract_chapter_number(chapter_text),
+                        "title": chapter_text,
+                    }
 
             except Exception as e:
                 self.logger.warning(f"Lỗi xử lý works-chapter-item: {e}")
-                continue
+                return None
 
-        return chapters
+        with ThreadPoolExecutor(max_workers=min(8, len(chapter_items))) as executor:
+            results = list(executor.map(process_item, chapter_items))
 
-    def _parse_chapter_links(self, links: list, base_url: str) -> List[Dict[str, str]]:
-        chapters = []
-        for link in links:
-            try:
-                chapter_url = link.get("href")
-                chapter_text = self.clean_text(link.get_text())
-
-                if chapter_url:
-                    chapters.append(
-                        {
-                            "url": self.normalize_url(chapter_url, base_url),
-                            "number": self.extract_chapter_number(chapter_text),
-                            "title": chapter_text,
-                        }
-                    )
-
-            except Exception as e:
-                self.logger.warning(f"Lỗi xử lý chapter link: {e}")
-                continue
-
-        return chapters
+        return [r for r in results if r]
 
     def get_image_urls(self, chapter_url: str) -> List[str]:
         try:
@@ -142,28 +98,27 @@ class TruyenQQParser(BaseMangaParser):
     def _extract_from_page_chapter_structure(
         self, soup: BeautifulSoup, base_url: str
     ) -> List[str]:
-        image_urls = []
         page_chapters = soup.select(".page-chapter")
-
         if not page_chapters:
-            return image_urls
+            return []
 
-        for page_div in page_chapters:
+        def process_page(page_div):
             try:
                 img = page_div.find("img")
                 if not img:
-                    continue
+                    return None
 
                 src = self._extract_best_image_url(img)
                 if src:
-                    full_url = self.normalize_url(src, base_url)
-                    image_urls.append(full_url)
-
+                    return self.normalize_url(src, base_url)
             except Exception as e:
                 self.logger.warning(f"Lỗi xử lý page: {e}")
-                continue
+                return None
 
-        return image_urls
+        with ThreadPoolExecutor(max_workers=min(8, len(page_chapters))) as executor:
+            results = list(executor.map(process_page, page_chapters))
+
+        return [r for r in results if r]
 
     def _extract_best_image_url(self, img_element) -> Optional[str]:
         for attr in self.IMAGE_PRIORITY_ATTRS:
@@ -191,11 +146,11 @@ class TruyenQQParser(BaseMangaParser):
 
     def _deduplicate_and_sort(self, image_urls: List[str]) -> List[str]:
         seen = set()
-        unique_urls = []
-        for url in image_urls:
-            if url not in seen and self.is_valid_image_url(url):
-                seen.add(url)
-                unique_urls.append(url)
+        unique_urls = [
+            url
+            for url in image_urls
+            if url not in seen and not seen.add(url) and self.is_valid_image_url(url)
+        ]
 
         return self._sort_image_urls(unique_urls)
 
@@ -209,11 +164,6 @@ class TruyenQQParser(BaseMangaParser):
             return image_urls
 
     def _extract_page_order(self, url: str) -> int:
-        patterns = [r"/(\d+)\.(jpg|jpeg|png|webp)", r"page_(\d+)", r"/(\d+)\."]
-
-        for pattern in patterns:
-            match = re.search(pattern, url)
-            if match:
-                return int(match.group(1))
-
-        return 9999
+        pattern = re.compile(r"(?:page_|/)(\d+)(?:\.(?:jpg|jpeg|png|webp))?", re.I)
+        match = pattern.search(url)
+        return int(match.group(1)) if match else 9999
