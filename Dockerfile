@@ -20,4 +20,4 @@ COPY . .
 
 RUN prisma generate
 
-CMD ["python", "run.py"]
+CMD ["python", "main.py"]

@@ -8,10 +8,9 @@ from leecher import ParserFactory
 
 
 class MangaLeechService:
-    def __init__(self, db_manager, check_interval: int = 60):
+    def __init__(self, db_manager):
         self.db = db_manager
         self.leecher = MangaLeecher(self.db, enable_r2=True)
-        self.check_interval = check_interval
         self.logger = logging.getLogger(__name__)
         self._stop_event = asyncio.Event()
         self._register_parsers()
@@ -39,11 +38,11 @@ class MangaLeechService:
         if reset_count > 0:
             self.logger.info(f"Reset {reset_count} chapters đang download dở")
 
-        self.logger.info("Manga Leech Service chạy 1 lần...")
-
         try:
             await self._process_pending_series()
 
+        except KeyboardInterrupt:
+            self.logger.info("Service dừng bởi người dùng")
         except Exception as e:
             self.logger.error(f"Lỗi service: {e}")
         finally:
@@ -69,17 +68,29 @@ class MangaLeechService:
                     self.logger.error(f"Source không hỗ trợ: {series.source.name}")
                     return
 
-                async with rate_limiter:
-                    async with semaphore:
-                        success = await self.leecher.download_series(series.id)
-                        level = self.logger.info if success else self.logger.error
-                        level(f"{'✅' if success else '❌'} {series.title}")
+                try:
+                    async with rate_limiter:
+                        async with semaphore:
+                            if self._stop_event.is_set():
+                                return
+                            success = await self.leecher.download_series(series.id)
+                            level = self.logger.info if success else self.logger.error
+                            level(f"{'✅' if success else '❌'} {series.title}")
+                except asyncio.CancelledError:
+                    self.logger.info(f"❌ {series.title} bị dừng giữa chừng")
+                    return
 
-            tasks = [process_one(series) for series in pending_series]
-            await asyncio.gather(*tasks)
+            self._tasks = [
+                asyncio.create_task(process_one(series)) for series in pending_series
+            ]
+            await asyncio.gather(*self._tasks, return_exceptions=True)
 
         except Exception as e:
             self.logger.error(f"Lỗi xử lý series: {e}")
 
     def stop(self):
+        self.logger.info("Đang dừng service ngay lập tức...")
         self._stop_event.set()
+        if hasattr(self, "_tasks"):
+            for task in self._tasks:
+                task.cancel()
