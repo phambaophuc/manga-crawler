@@ -6,3 +6,5 @@ beautifulsoup4
 python-slugify
 Pillow
 boto3
+aiolimiter
+APScheduler

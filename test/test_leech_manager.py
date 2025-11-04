@@ -8,11 +8,9 @@ logging.basicConfig(
 
 
 async def test_leech_manager():
-    """Test các phương thức leech truyện"""
     db = LeecheDatabaseManager()
 
     try:
-        # Kết nối database
         if not await db.connect():
             return
 

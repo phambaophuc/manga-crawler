@@ -16,16 +16,10 @@ async def test_schema():
         if not await db.connect():
             return
 
-        # Health check
         if not await db.health_check():
             return
 
         print("🎉 Schema đã được tạo thành công!")
-        print("✅ Các bảng đã có:")
-        print("   - manga_sources")
-        print("   - manga_series")
-        print("   - manga_chapters")
-        print("   - chapter_images")
     except Exception as e:
         logging.error(f"❌ Lỗi test schema: {e}")
     finally:

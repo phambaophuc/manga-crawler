@@ -4,13 +4,11 @@ from shared.logger import logging
 
 
 def test_truyenqq_parser():
-    """Test TruyenQQ parser với URL thật"""
     parser = TruyenQQParser()
 
     try:
         print("🧪 Testing TruyenQQ Parser...")
 
-        # Test URL (thay bằng URL thật khi test)
         test_series_url = (
             "https://truyenqqgo.com/truyen-tranh/lao-xa-tu-tien-truyen-16211"
         )
@@ -21,7 +19,6 @@ def test_truyenqq_parser():
         print(f"   ✅ Found {len(chapters)} chapters")
 
         if chapters:
-            # Hiển thị 5 chapters đầu
             for i, chapter in enumerate(chapters[:15]):
                 print(f"   {i+1}. {chapter['number']} - {chapter['title']}")
                 print(f"      URL: {chapter['url']}")
@@ -31,7 +28,6 @@ def test_truyenqq_parser():
         print(f"   ✅ Found {len(image_urls)} images")
 
         if image_urls:
-            # Hiển thị 3 ảnh đầu
             for i, url in enumerate(image_urls[:3]):
                 print(f"   {i+1}. {url}")
 

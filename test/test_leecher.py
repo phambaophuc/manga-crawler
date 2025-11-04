@@ -9,18 +9,15 @@ logging.basicConfig(
 
 
 async def test_leecher():
-    """Test core leecher"""
     db = LeecheDatabaseManager()
     leecher = MangaLeecher(db)
 
     try:
-        # Kết nối database
         if not await db.connect():
             return
 
         print("🧪 Testing core leecher...")
 
-        # Thêm series test
         series = await db.add_manga_series(
             source_name="truyenqq",
             title="Sensei, Bokutachi Wa Koroshiteimasen",

@@ -2,11 +2,7 @@ import requests
 
 
 def test_image_download():
-    """Test tải 1 ảnh với headers"""
-    # Lấy 1 URL ảnh từ log của bạn
-    test_image_url = (
-        "https://s135.hinhhinh.com/20199/1/0.jpg?gt=hdfgdfg"  # Thay bằng URL thật
-    )
+    test_image_url = "https://s135.hinhhinh.com/20199/1/0.jpg?gt=hdfgdfg"
 
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",

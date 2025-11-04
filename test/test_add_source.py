@@ -5,17 +5,14 @@ from shared.logger import logging
 
 
 async def test_source():
-    """Test các phương thức leech truyện"""
     db = LeecheDatabaseManager()
 
     try:
-        # Kết nối database
         if not await db.connect():
             return
 
         print("🧪 Testing Add Source...")
 
-        # 1. Thêm source
         print("1. Thêm manga source...")
         source = await db.add_manga_source(
             name="truyenqq",

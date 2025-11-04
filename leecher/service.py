@@ -1,6 +1,8 @@
 import asyncio
 import logging
 import signal
+
+from aiolimiter import AsyncLimiter
 from leecher.manga_leecher import MangaLeecher
 from leecher import ParserFactory
 
@@ -37,55 +39,44 @@ class MangaLeechService:
         if reset_count > 0:
             self.logger.info(f"Reset {reset_count} chapters đang download dở")
 
-        self.logger.info("Manga Leech Service khởi động...")
+        self.logger.info("Manga Leech Service chạy 1 lần...")
 
         try:
-            while not self._stop_event.is_set():
-                await self._process_pending_series()
-                try:
-                    await asyncio.wait_for(
-                        self._stop_event.wait(), timeout=self.check_interval
-                    )
-                except asyncio.TimeoutError:
-                    pass
+            await self._process_pending_series()
 
-        except KeyboardInterrupt:
-            self.logger.info("Service dừng bởi người dùng")
         except Exception as e:
             self.logger.error(f"Lỗi service: {e}")
         finally:
             await self.db.disconnect()
-            self.logger.info("Đã dừng dịch vụ.")
+            self.logger.info("Đã chạy xong và dừng dịch vụ.")
 
     async def _process_pending_series(self):
         try:
             pending_series = await self.db.get_pending_series()
-
             if not pending_series:
                 return
 
             self.logger.info(f"Xử lý {len(pending_series)} series")
 
-            for i, series in enumerate(pending_series):
+            rate_limiter = AsyncLimiter(max_rate=1, time_period=3)
+            semaphore = asyncio.Semaphore(3)
+
+            async def process_one(series):
                 if self._stop_event.is_set():
-                    break
+                    return
 
                 if series.source.name not in ParserFactory.get_available_sources():
                     self.logger.error(f"Source không hỗ trợ: {series.source.name}")
-                    continue
+                    return
 
-                if i > 0:
-                    self.logger.info("⏳ Chờ 3s...")
-                    try:
-                        await asyncio.wait_for(self._stop_event.wait(), timeout=3.0)
-                    except asyncio.TimeoutError:
-                        pass
-                    if self._stop_event.is_set():
-                        break
+                async with rate_limiter:
+                    async with semaphore:
+                        success = await self.leecher.download_series(series.id)
+                        level = self.logger.info if success else self.logger.error
+                        level(f"{'✅' if success else '❌'} {series.title}")
 
-                success = await self.leecher.download_series(series.id)
-                level = self.logger.info if success else self.logger.error
-                level(f"{'✅' if success else '❌'} {series.title}")
+            tasks = [process_one(series) for series in pending_series]
+            await asyncio.gather(*tasks)
 
         except Exception as e:
             self.logger.error(f"Lỗi xử lý series: {e}")
